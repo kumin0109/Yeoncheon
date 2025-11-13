@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>연천군 자연관광지</title>
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+
+  <!-- === 테마 변수 (로고 기반, 세련되게 보정) === -->
+  <style>
+    :root{
+      --primary: #0B63B8;       /* 딥 블루 - 헤더 / 액션 */
+      --secondary: #2E8B57;     /* 포레스트 그린 - 서브 강조 */
+      --accent: #F9C300;        /* 웜 옐로우 - 포인트 */
+      --warn: #FF7043;          /* 소프트 오렌지 - 경고/하이라이트 */
+      --bg: #FAFBFC;            /* 페이지 배경 */
+      --card-bg: #FFFFFF;       /* 카드/패널 배경 */
+      --muted: #F1F6F9;         /* 약한 호버 배경 */
+      --text: #2B2B2B;          /* 본문 텍스트 */
+      --subtext: #6B747A;       /* 서브 텍스트 */
+      --soft-shadow: 0 6px 18px rgba(11,99,184,0.06);
+    }
+
+    /* 기본 리셋 */
+    *{box-sizing:border-box;margin:0;padding:0}
+    html,body{height:100%}
+    body{
+      font-family: 'Noto Sans KR', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+      background:var(--bg);
+      color:var(--text);
+      line-height:1.6;
+      -webkit-font-smoothing:antialiased;
+      -moz-osx-font-smoothing:grayscale;
+    }
+
+    /* 헤더 */
+    header{
+      background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+      color: #fff;
+      padding: 56px 20px;
+      text-align:center;
+      box-shadow: var(--soft-shadow);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    header h1{ font-size:1.9rem; font-weight:700; margin-bottom:6px; letter-spacing:-0.4px; }
+    header p{ font-size:1.02rem; opacity:0.95; }
+
+    .container{ max-width:1200px; margin:0 auto; padding:28px 20px; }
+
+    /* 탭 네비게이션 */
+    .tabs{ display:flex; flex-wrap:wrap; gap:10px; margin-bottom:0; border-bottom:3px solid #e8edf2; overflow-x:auto; padding-bottom:0;}
+    .tab{
+      padding:10px 18px; background:var(--card-bg); border:2px solid transparent; border-bottom:none;
+      cursor:pointer; font-size:15px; font-weight:500; border-radius:10px 10px 0 0;
+      transition: all .18s ease; white-space:nowrap;
+      box-shadow: 0 1px 4px rgba(9,30,66,0.04);
+      color:var(--text);
+    }
+    .tab:hover{ background:var(--muted); transform: translateY(-2px); }
+    .tab.active{
+      background: var(--primary);
+      color: #fff;
+      border-color: var(--primary);
+      box-shadow: 0 8px 18px rgba(11,99,184,0.12);
+    }
+
+    /* 탭 컨텐츠 카드 */
+    .tab-content{
+      display:none; background:var(--card-bg); padding:26px; border-radius:0 14px 14px 14px; box-shadow:var(--soft-shadow); margin-bottom:36px;
+    }
+    .tab-content.active{ display:block; animation:fadeIn .28s ease; }
+    @keyframes fadeIn{ from{opacity:0; transform:translateY(8px)} to{opacity:1; transform:translateY(0)} }
+
+    h2{ font-size:1.45rem; margin-bottom:16px; color:var(--text); }
+
+    .columns{ display:grid; gap:18px; margin:16px 0; }
+    .columns-2{ grid-template-columns: repeat(auto-fit, minmax(360px,1fr)); }
+
+    /* 정보 박스 */
+    .info-box, .success-box, .warning-box, .error-box{
+      padding:18px; border-radius:12px; background:linear-gradient(180deg,#fff,#fcfdff); border-left:4px solid var(--accent);
+    }
+    .success-box{ border-left-color:var(--secondary); background:#f3fbf5; }
+    .warning-box{ border-left-color:var(--warn); background:#fff7f1; }
+    .error-box{ border-left-color:#dc3545; background:#fff6f6; }
+
+    /* 리스트 그리드 & 카드 */
+    .list-grid{ display:grid; gap:14px; grid-template-columns: repeat(auto-fill,minmax(240px,1fr)); margin-top:8px; }
+    .card{ display:flex; gap:12px; align-items:flex-start; padding:10px; border-radius:12px; background:var(--card-bg); cursor:pointer; box-shadow:0 2px 8px rgba(11,99,184,0.04); transition:transform .14s, box-shadow .14s; }
+    .card:hover{ transform:translateY(-6px); box-shadow:0 12px 26px rgba(11,99,184,0.08); }
+    .card img{ width:110px; height:74px; object-fit:cover; border-radius:8px; flex-shrink:0; }
+    .card .meta strong{ color:var(--primary); display:block; font-size:15px; }
+    .card .meta small{ color:var(--subtext); display:block; margin-top:6px; font-size:13px; }
+
+    /* 지도 박스 */
+    #map { height:520px; border-radius:12px; box-shadow:0 6px 18px rgba(9,30,66,0.06); border:1px solid rgba(8,40,112,0.03); }
+
+    /* 상세 패널 */
+    .detail-panel{ margin-top:16px; display:grid; gap:12px; }
+    .gallery{ display:flex; gap:8px; overflow-x:auto; margin-top:8px; }
+    .gallery img{ width:220px; height:140px; object-fit:cover; border-radius:10px; flex-shrink:0; }
+
+    /* 버튼 스타일(간단) */
+    .btn { padding:10px 14px; border-radius:10px; background:var(--primary); color:#fff; border:none; cursor:pointer; font-weight:600; box-shadow:0 6px 12px rgba(11,99,184,0.12); }
+    .btn.ghost{ background:var(--card-bg); color:var(--text); border:1px solid rgba(11,99,184,0.06); box-shadow:none; }
+
+    /* 퀴즈/메트릭 */
+    .metric{ text-align:center; padding:14px; background:var(--card-bg); border-radius:12px; box-shadow:0 2px 8px rgba(9,30,66,0.04); }
+    .metric-value{ font-size:2.2rem; font-weight:800; color:var(--primary); }
+    .metric-label{ color:var(--subtext); }
+
+    .progress{ background:#e9eef6; border-radius:10px; height:28px; overflow:hidden; margin:12px 0; }
+    .progress-bar{ height:100%; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:700; transition:width .6s ease; background:linear-gradient(90deg,var(--primary),var(--secondary)); }
+
+    footer{ background: linear-gradient(0deg, rgba(0,0,0,0.03), rgba(0,0,0,0.02)), var(--primary); color:#fff; text-align:center; padding:20px 16px; border-radius:8px; margin-top:18px; }
+    footer p{ margin:6px 0; opacity:0.95; font-size:0.95rem; }
+
+    /* small screens */
+    @media (max-width:768px){
+      header h1{ font-size:1.3rem }
+      .tabs .tab{ padding:8px 12px; font-size:14px }
+      .card img{ width:86px; height:60px; }
+      #map{ height:360px }
+      .gallery img{ width:160px; height:100px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🌿 연천군 자연관광지</h1>
+    <p>한탄강 지질공원 · 폭포 · 숲길 · 전망대까지 연천의 주요 자연 명소를 안내합니다</p>
+  </header>
+
+  <div class="container">
+    <div class="tabs" role="tablist" aria-label="메뉴">
+      <button class="tab active" onclick="openTab('home')">홈</button>
+      <button class="tab" onclick="openTab('tab-map')">지도</button>
+      <button class="tab" onclick="openTab('list')">관광지 목록</button>
+      <button class="tab" onclick="openTab('tips')">방문 팁</button>
+      <button class="tab" onclick="openTab('events')">행사·공지</button>
+      <button class="tab" onclick="openTab('contact')">문의</button>
+    </div>
+
+    <!-- 홈 -->
+    <div id="home" class="tab-content active">
+      <h2>연천군 자연관광지에 오신 것을 환영합니다</h2>
+      <div class="columns columns-2">
+        <div class="info-box">
+          <strong>소개</strong><br>
+          연천군은 한탄강 협곡과 폭포, 숲길, 습지 등 다양한 자연경관을 보유하고 있습니다. 이 사이트는
+          방문 전 위치·사진·접근 정보를 한곳에서 확인할 수 있도록 돕습니다.
+        </div>
+        <div class="success-box">
+          <strong>사용법</strong><br>
+          - '지도' 탭에서 마커를 클릭하면 상세정보로 이동합니다.<br>
+          - '관광지 목록'에서 장소를 선택하면 상세 패널이 열립니다.
+        </div>
+      </div>
+
+      <h2 style="margin-top:18px">추천 명소</h2>
+      <div id="featured-list" class="list-grid">
+        <!-- JS에서 채웁니다 -->
+      </div>
+    </div>
+
+    <!-- 지도 탭 (id 충돌 방지로 tab-map 사용) -->
+    <div id="tab-map" class="tab-content">
+      <h2>전체 지도</h2>
+      <div id="map" aria-label="지도"></div>
+
+      <div style="margin-top:12px;">
+        <strong>찾기:</strong>
+        <input id="search-input" type="text" placeholder="장소명 입력 후 Enter" style="padding:8px 10px; width:60%; max-width:360px; border-radius:8px; border:1px solid #e6eef9;">
+        <button class="btn ghost" onclick="fitToSearch()" style="margin-left:8px">찾기</button>
+      </div>
+    </div>
+
+    <!-- 목록 -->
+    <div id="list" class="tab-content">
+      <h2>관광지 목록</h2>
+      <div id="attraction-cards" class="list-grid"></div>
+
+      <div id="detail" class="detail-panel" style="display:none"></div>
+    </div>
+
+    <!-- 팁 -->
+    <div id="tips" class="tab-content">
+      <h2>방문 팁</h2>
+      <div class="info-box">
+        - 일부 명소는 통신이 불안정할 수 있어 오프라인 지도도 준비하세요.<br>
+        - 쓰레기는 반드시 되가져가고, 야생동물·식물을 훼손하지 마세요.<br>
+        - 계곡·폭포 주변은 비·당일 기상에 따라 위험할 수 있습니다.
+      </div>
+    </div>
+
+    <!-- 이벤트 -->
+    <div id="events" class="tab-content">
+      <h2>행사·공지</h2>
+      <div class="warning-box">
+        최신 축제 일정·탐방로 통제 정보는 연천군청 공지 또는 관광안내센터를 확인하세요.
+      </div>
+    </div>
+
+    <!-- 문의 -->
+    <div id="contact" class="tab-content">
+      <h2>문의</h2>
+      <div class="info-box">
+        📧 연천군 관광안내: <strong>info@yeoncheon.go.kr</strong> (예시)<br>
+        📞 관광문의: <strong>031-XXX-XXXX</strong> (예시)
+      </div>
+    </div>
+
+  </div>
+
+  <footer>
+    <p>🌐 연천군 자연관광 안내</p>
+    <p style="opacity:0.9">© <span id="year"></span> 연천군. All rights reserved.</p>
+  </footer>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <script>
+    // 현재 연도 표시
+    document.getElementById('year').textContent = new Date().getFullYear();
+
+    // 탭 전환 함수
+    function openTab(tabId){
+      const contents = document.getElementsByClassName('tab-content');
+      for(let c of contents) c.classList.remove('active');
+      const tabs = document.getElementsByClassName('tab');
+      for(let t of tabs) t.classList.remove('active');
+
+      const target = document.getElementById(tabId);
+      if (target) target.classList.add('active');
+
+      // 탭 버튼 active 토글 (첫 일치 버튼)
+      const btns = Array.from(document.getElementsByClassName('tab'));
+      for (let b of btns) {
+        const on = b.getAttribute('onclick') || '';
+        if (on.includes("'" + tabId + "'") || on.includes('"' + tabId + '"')) {
+          b.classList.add('active');
+          break;
+        }
+      }
+
+      // 탭이 지도일 경우 Leaflet 리사이즈
+      if (tabId === 'tab-map' && window._map) {
+        setTimeout(()=> window._map.invalidateSize(), 220);
+      }
+      // 스크롤 맨 위
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // ===== 예시 데이터 (실제 데이터로 교체하세요) =====
+    const attractions = [
+      {
+        id: 'hantan-river-canyon',
+        name: '한탄강 지질공원 협곡',
+        lat: 38.0235, lon: 127.0487,
+        short: '화산 활동과 하천 침식이 만든 절경 — 지질학적 가치가 높은 협곡',
+        desc: '한탄강의 주상절리와 협곡은 독특한 지질 경관을 보여줍니다. 산책로와 전망대가 잘 정비되어 있어 사계절 감상이 가능합니다.',
+        images: ['assets/images/hantan1.jpg','assets/images/hantan2.jpg'],
+        access: '차로 접근 권장, 주차장 있음. 대중교통은 계절·시간대 확인 필요.',
+        facilities: '주차장, 화장실(일부 지역), 전망대'
+      },
+      {
+        id: 'jaein-falls',
+        name: '재인폭포',
+        lat: 37.9291, lon: 127.0833,
+        short: '가을 단풍 명소 — 폭포와 숲길이 어우러짐',
+        desc: '재인폭포는 물줄기와 주변 단풍이 아름다운 명소입니다. 가벼운 트레킹 코스로 가족 단위 방문에 적합합니다.',
+        images: ['assets/images/jaein1.jpg','assets/images/jaein2.jpg'],
+        access: '마을 주차 후 도보 10~15분',
+        facilities: '소형 주차장, 안내표지'
+      },
+      {
+        id: 'cheonjeyeon',
+        name: '천제연습지(예시)',
+        lat: 37.9780, lon: 127.0700,
+        short: '습지와 야생화가 아름다운 생태공간',
+        desc: '습지 보호구역으로 철새 도래지 및 다양한 식물이 서식합니다. 생태 탐방로를 이용하세요.',
+        images: ['assets/images/swamp1.jpg'],
+        access: '탐방로 입구 주차장 이용',
+        facilities: '탐방로, 안내판'
+      },
+      {
+        id: 'forest-trail',
+        name: '숲길 둘레길',
+        lat: 37.9900, lon: 127.1100,
+        short: '걷기 좋은 숲길 코스 — 약 4km',
+        desc: '완만한 둘레길로 초보자도 무리 없이 걸을 수 있습니다. 중간 중간 전망대와 벤치가 있습니다.',
+        images: ['assets/images/trail1.jpg'],
+        access: '대중교통 가능, 버스정류장 인근',
+        facilities: '벤치, 해설판'
+      },
+      {
+        id: 'rock-formation',
+        name: '기암괴석 관찰지',
+        lat: 37.9500, lon: 127.0200,
+        short: '독특한 암석 구조를 관찰할 수 있는 포인트',
+        desc: '하천변 및 언덕에 분포한 기암괴석은 사진 촬영 포인트로 인기입니다.',
+        images: ['assets/images/rock1.jpg'],
+        access: '주차 후 약간의 도보 필요',
+        facilities: '주차, 안전표지'
+      },
+      {
+        id: 'scenic-overlook',
+        name: '전망대(일몰 포인트)',
+        lat: 37.9650, lon: 127.0550,
+        short: '일몰과 야경이 아름다운 전망대',
+        desc: '서쪽으로 열린 전망으로 석양과 강줄기를 동시에 감상할 수 있습니다. 안전에 유의하세요.',
+        images: ['assets/images/view1.jpg'],
+        access: '차량 진입 가능, 소형 주차장',
+        facilities: '주차장, 조망대'
+      }
+    ];
+
+    // ===== Leaflet 지도 초기화 =====
+    const mapCenter = [37.98, 127.06]; // 연천 중심 (샘플)
+    const map = L.map('map').setView(mapCenter, 11);
+    window._map = map;
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+
+    const markerGroup = L.layerGroup().addTo(map);
+    const markersById = {};
+
+    function createMarkers(){
+      markerGroup.clearLayers();
+      for (let a of attractions){
+        const m = L.marker([a.lat, a.lon]).addTo(markerGroup);
+        m.bindPopup(`<strong>${a.name}</strong><br>${a.short}<br><a href="#" onclick="showAttraction('${a.id}');return false;">자세히 보기</a>`);
+        m.on('click', ()=> showAttraction(a.id));
+        markersById[a.id] = m;
+      }
+    }
+
+    // 추천 리스트 채우기 (홈)
+    function renderFeatured(){
+      const container = document.getElementById('featured-list');
+      container.innerHTML = '';
+      attractions.slice(0,4).forEach(a=>{
+        const div = document.createElement('div');
+        div.className = 'card';
+        div.innerHTML = `<img src="${a.images[0] || 'assets/images/placeholder.jpg'}" alt="${a.name}">
+                         <div class="meta"><strong>${a.name}</strong><small>${a.short}</small></div>`;
+        div.onclick = ()=>{ openTab('list'); showAttraction(a.id); };
+        container.appendChild(div);
+      });
+    }
+
+    // 목록 렌더링
+    function renderList(){
+      const container = document.getElementById('attraction-cards');
+      container.innerHTML = '';
+      for (let a of attractions){
+        const div = document.createElement('div');
+        div.className = 'card';
+        div.innerHTML = `<img src="${a.images[0] || 'assets/images/placeholder.jpg'}" alt="${a.name}">
+                         <div class="meta"><strong>${a.name}</strong><small>${a.short}</small></div>`;
+        div.onclick = ()=>{ showAttraction(a.id); focusOn(a.id); };
+        container.appendChild(div);
+      }
+    }
+
+    // 상세 보기
+    function showAttraction(id){
+      const a = attractions.find(x=>x.id===id);
+      if (!a) return;
+      const detail = document.getElementById('detail');
+      detail.style.display = 'block';
+      detail.innerHTML = `
+        <div style="background:var(--card-bg); padding:18px; border-radius:12px; box-shadow:0 4px 14px rgba(9,30,66,0.04);">
+          <h3 style="margin-bottom:8px; color:var(--primary)">${a.name}</h3>
+          <div class="gallery">
+            ${ (a.images && a.images.length) ? a.images.map(img=>`<img src="${img}" alt="${a.name}">`).join('') : '<img src="assets/images/placeholder.jpg" alt="이미지">'}
+          </div>
+          <p style="margin-top:12px">${a.desc}</p>
+          <p><strong>이용정보:</strong> ${a.access || '정보 없음'}</p>
+          <p><strong>편의시설:</strong> ${a.facilities || '정보 없음'}</p>
+          <div style="margin-top:12px; display:flex; gap:10px; flex-wrap:wrap">
+            <button class="btn" onclick="focusOn('${a.id}')">지도에서 보기</button>
+            <a class="btn ghost" href="#" onclick="openDirections(${a.lat},${a.lon});return false;">길찾기</a>
+          </div>
+        </div>
+      `;
+      // 스크롤 보정
+      detail.scrollIntoView({ behavior:'smooth', block:'start' });
+    }
+
+    // 포커스 (지도에서 보기)
+    function focusOn(id){
+      const a = attractions.find(x=>x.id===id);
+      if (!a) return;
+      openTab('tab-map');
+      setTimeout(()=> {
+        map.setView([a.lat, a.lon], 13);
+        const m = markersById[id];
+        if (m) m.openPopup();
+      }, 260);
+    }
+
+    // 길찾기 - Google Maps
+    function openDirections(lat, lon){
+      const url = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}`;
+      window.open(url, '_blank');
+    }
+
+    // 검색
+    function fitToSearch(){
+      const q = document.getElementById('search-input').value.trim().toLowerCase();
+      if (!q) { alert('검색어를 입력하세요.'); return; }
+      const found = attractions.find(a => a.name.toLowerCase().includes(q));
+      if (found){
+        focusOn(found.id);
+      } else {
+        alert('검색 결과가 없습니다. 정확한 명칭 일부를 입력해보세요.');
+      }
+    }
+
+    // 이미지 404 대비: placeholder로 대체
+    document.addEventListener('error', function(e){
+      const t = e.target;
+      if (t.tagName.toLowerCase() === 'img' && t.src && t.src.includes('assets/images/')) {
+        t.src = 'assets/images/placeholder.jpg';
+      }
+    }, true);
+
+    // 초기화
+    createMarkers();
+    renderFeatured();
+    renderList();
+
+    // 지도 bounds 맞춤
+    (function fitAll(){
+      const pts = attractions.map(a=> [a.lat, a.lon]);
+      if (pts.length){
+        map.fitBounds(L.latLngBounds(pts), { padding:[40,40] });
+      }
+    })();
+
+    // 탭에서 Enter로 검색 가능
+    document.getElementById('search-input').addEventListener('keypress', function(e){
+      if (e.key === 'Enter') fitToSearch();
+    });
+
+    // (선택) 퀴즈 기능을 유지하려면 기존 퀴즈 스크립트를 여기에 추가하시면 됩니다.
+  </script>
+
+</body>
+</html>
