@@ -1,6 +1,560 @@
-<!-- index.html -->
 <!doctype html>
-<html>
-  <head><meta charset="utf-8"><title>Test</title></head>
-  <body><h1>GitHub Pages test OK</h1></body>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>연천군 관광지 — 선택 기반 추천 코스</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+  :root{--primary:#0B63B8;--muted:#F1F6F9;--card:#fff;--text:#222}
+  *{box-sizing:border-box} body{font-family:"Noto Sans KR",sans-serif;margin:0;background:#f7fbff;color:var(--text)}
+  header{background:linear-gradient(135deg,var(--primary),#2E8B57);color:#fff;padding:20px 16px;text-align:center}
+  header h1{margin:0;font-size:1.2rem}
+  .wrap{max-width:1200px;margin:18px auto;padding:12px}
+  .controls{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center}
+  .btn{background:var(--primary);color:#fff;border:0;padding:8px 12px;border-radius:8px;cursor:pointer;font-weight:700}
+  .btn.ghost{background:transparent;color:var(--text);border:1px solid rgba(0,0,0,0.08)}
+  .layout{display:grid;grid-template-columns:1fr 380px;gap:12px}
+  #map{height:680px;border-radius:12px;border:1px solid rgba(0,0,0,0.06)}
+  .panel{background:var(--card);padding:12px;border-radius:12px;height:680px;overflow:auto;border:1px solid rgba(0,0,0,0.04)}
+  .search{display:flex;gap:8px;margin-bottom:10px}
+  input[type="text"]{flex:1;padding:8px;border-radius:8px;border:1px solid #e6eef9}
+  .place{display:flex;gap:10px;padding:8px;border-radius:8px;border:1px solid #f0f4fb;align-items:center;margin-bottom:8px}
+  .place img{width:84px;height:56px;object-fit:cover;border-radius:6px}
+  .place .meta{flex:1}
+  .place .meta b{display:block;color:var(--primary)}
+  .small{font-size:13px;color:#666}
+  .route-list li{padding:8px;background:var(--muted);border-radius:8px;margin-bottom:6px;list-style:none}
+  footer{max-width:1200px;margin:18px auto;text-align:center;color:#666;font-size:13px}
+  @media(max-width:980px){.layout{grid-template-columns:1fr} .panel{height:auto} #map{height:420px}}
+</style>
+</head>
+<body>
+<header>
+  <h1>연천군 관광지 선택 → 추천 코스 생성</h1>
+  <div style="font-size:13px;opacity:.95">여러 곳 선택 후 시작지를 고르거나 현재 위치를 출발지로 선택하세요.</div>
+</header>
+
+<div class="wrap">
+  <div class="controls">
+    <button id="btn-select-all" class="btn ghost">전체선택</button>
+    <button id="btn-clear-all" class="btn ghost">선택해제</button>
+    <button id="btn-recommend" class="btn">추천 루트 생성</button>
+    <button id="btn-clear-route" class="btn ghost">루트 지우기</button>
+
+    <label style="margin-left:auto;display:flex;gap:8px;align-items:center">
+      <select id="start-mode" style="padding:8px;border-radius:8px;border:1px solid #eee">
+        <option value="pick">선택한 장소 중에서 시작</option>
+        <option value="current">현재 위치에서 시작</option>
+      </select>
+    </label>
+
+    <label style="display:flex;gap:6px;align-items:center">
+      <span class="small">시작지:</span>
+      <select id="start-select" style="padding:8px;border-radius:8px;border:1px solid #eee"></select>
+    </label>
+  </div>
+
+  <div class="layout">
+    <div id="map"></div>
+
+    <aside class="panel">
+      <div class="search">
+        <input id="q" placeholder="검색 (장소명 / 주소 포함)"/>
+        <button id="btn-search" class="btn ghost">검색</button>
+      </div>
+
+      <h3 style="margin:6px 0">관광지 목록</h3>
+      <div id="places"></div>
+
+      <hr style="margin:12px 0;border:none;border-top:1px solid #f0f4fb">
+      <div id="route-box" style="display:none">
+        <h4>추천 루트</h4>
+        <ol id="route-list" class="route-list"></ol>
+        <div style="margin-top:8px">총 이동거리(직선 합): <b id="total-dist">0 km</b></div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<footer>데모: 제공하신 XML 데이터로 작동합니다. 이미지가 보이지 않으면 http→https 제한 때문입니다.</footer>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+/* =======================
+   1) 여기에 XML 데이터를 그대로 넣으세요 (제공한 전체 XML)
+   ======================= */
+const xmlText = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><response><header>
+  <resultCode>0000</resultCode>
+  <resultMsg>OK</resultMsg>
+</header><body><items>
+  <item>
+    <addr1>경기도 연천군 신서면 대광리</addr1>
+    <addr2></addr2>
+    <areacode>31</areacode>
+    <cat1>A01</cat1>
+    <cat2>A0101</cat2>
+    <cat3>A01010400</cat3>
+    <contentid>127163</contentid>
+    <contenttypeid>12</contenttypeid>
+    <createdtime>20030327090000</createdtime>
+    <firstimage>http://tong.visitkorea.or.kr/cms/resource/95/3537495_image2_1.jpg</firstimage>
+    <firstimage2>http://tong.visitkorea.or.kr/cms/resource/95/3537495_image3_1.jpg</firstimage2>
+    <cpyrhtDivCd>Type3</cpyrhtDivCd>
+    <mapx>127.1674160678</mapx>
+    <mapy>38.1977562930</mapy>
+    <mlevel>6</mlevel>
+    <modifiedtime>20250915191415</modifiedtime>
+    <sigungucode>21</sigungucode>
+    <tel></tel>
+    <title>고대산</title>
+    <zipcode>11000</zipcode>
+  </item>
+  <item>
+    <addr1>경기도 연천군 신서면 고대산길 84-79</addr1>
+    <addr2></addr2>
+    <areacode>31</areacode>
+    <cat1>A01</cat1>
+    <cat2>A0101</cat2>
+    <cat3>A01010600</cat3>
+    <contentid>3018261</contentid>
+    <contenttypeid>12</contenttypeid>
+    <createdtime>20231005172754</createdtime>
+    <firstimage>http://tong.visitkorea.or.kr/cms/resource/03/3002903_image2_1.jpg</firstimage>
+    <firstimage2>http://tong.visitkorea.or.kr/cms/resource/03/3002903_image3_1.jpg</firstimage2>
+    <cpyrhtDivCd>Type3</cpyrhtDivCd>
+    <mapx>127.1506644287</mapx>
+    <mapy>38.2113155104</mapy>
+    <mlevel>6</mlevel>
+    <modifiedtime>20250701170813</modifiedtime>
+    <sigungucode>21</sigungucode>
+    <tel></tel>
+    <title>고대산자연휴양림</title>
+    <zipcode>11001</zipcode>
+  </item>
+  <item>
+    <addr1>경기도 연천군 연천읍 동막리</addr1>
+    <addr2>198</addr2>
+    <areacode>31</areacode>
+    <cat1>A01</cat1>
+    <cat2>A0101</cat2>
+    <cat3>A01010500</cat3>
+    <contentid>2616251</contentid>
+    <contenttypeid>12</contenttypeid>
+    <createdtime>20190822014513</createdtime>
+    <firstimage>http://tong.visitkorea.or.kr/cms/resource/54/3518754_image2_1.jpg</firstimage>
+    <firstimage2>http://tong.visitkorea.or.kr/cms/resource/54/3518754_image3_1.jpg</firstimage2>
+    <cpyrhtDivCd>Type1</cpyrhtDivCd>
+    <mapx>127.1114269423</mapx>
+    <mapy>38.0969003950</mapy>
+    <mlevel>6</mlevel>
+    <modifiedtime>20250808135854</modifiedtime>
+    <sigungucode>21</sigungucode>
+    <tel></tel>
+    <title>동막골 응회암 (한탄강 유네스코 세계지질공원)</title>
+    <zipcode>11011</zipcode>
+  </item>
+  <item>
+    <addr1>경기도 연천군 연천읍 고문리</addr1>
+    <addr2>212</addr2>
+    <areacode>31</areacode>
+    <cat1>A01</cat1>
+    <cat2>A0101</cat2>
+    <cat3>A01010500</cat3>
+    <contentid>2616492</contentid>
+    <contenttypeid>12</contenttypeid>
+    <createdtime>20190826231730</createdtime>
+    <firstimage>http://tong.visitkorea.or.kr/cms/resource/39/3537539_image2_1.jpg</firstimage>
+    <firstimage2>http://tong.visitkorea.or.kr/cms/resource/39/3537539_image3_1.jpg</firstimage2>
+    <cpyrhtDivCd>Type3</cpyrhtDivCd>
+    <mapx>127.1174163087</mapx>
+    <mapy>38.0617546108</mapy>
+    <mlevel>6</mlevel>
+    <modifiedtime>20250915193512</modifiedtime>
+    <sigungucode>21</sigungucode>
+    <tel></tel>
+    <title>백의리층 (한탄강 유네스코 세계지질공원)</title>
+    <zipcode>11018</zipcode>
+  </item>
+  <item>
+    <addr1>경기도 연천군 신서면 평화로 3282-76</addr1>
+    <addr2></addr2>
+    <areacode>31</areacode>
+    <cat1>A01</cat1>
+    <cat2>A0101</cat2>
+    <cat3>A01010500</cat3>
+    <contentid>2735336</contentid>
+    <contenttypeid>12</contenttypeid>
+    <createdtime>20210819234618</createdtime>
+    <firstimage>http://tong.visitkorea.or.kr/cms/resource/81/3382281_image2_1.JPG</firstimage>
+    <firstimage2>http://tong.visitkorea.or.kr/cms/resource/81/3382281_image3_1.JPG</firstimage2>
+    <cpyrhtDivCd>Type3</cpyrhtDivCd>
+    <mapx>127.1612210451</mapx>
+    <mapy>38.2366849576</mapy>
+    <mlevel>6</mlevel>
+    <modifiedtime>20250319175910</modifiedtime>
+    <sigungucode>21</sigungucode>
+    <tel></tel>
+    <title>역고드름</title>
+    <zipcode>11001</zipcode>
+  </item>
+  <item>
+    <addr1>경기도 연천군 청산면 초성리</addr1>
+    <addr2></addr2>
+    <areacode>31</areacode>
+    <cat1>A01</cat1>
+    <cat2>A0101</cat2>
+    <cat3>A01010900</cat3>
+    <contentid>128044</contentid>
+    <contenttypeid>12</contenttypeid>
+    <createdtime>20040225090000</createdtime>
+    <firstimage>http://tong.visitkorea.or.kr/cms/resource/47/3537547_image2_1.jpg</firstimage>
+    <firstimage2>http://tong.visitkorea.or.kr/cms/resource/47/3537547_image3_1.jpg</firstimage2>
+    <cpyrhtDivCd>Type3</cpyrhtDivCd>
+    <mapx>127.0853157997</mapx>
+    <mapy>37.9894541362</mapy>
+    <mlevel>6</mlevel>
+    <modifiedtime>20250915194510</modifiedtime>
+    <sigungucode>21</sigungucode>
+    <tel></tel>
+    <title>열두개울</title>
+    <zipcode>11023</zipcode>
+  </item>
+  <item>
+    <addr1>경기도 연천군 전곡읍 은대리</addr1>
+    <addr2></addr2>
+    <areacode>31</areacode>
+    <cat1>A01</cat1>
+    <cat2>A0101</cat2>
+    <cat3>A01010500</cat3>
+    <contentid>2616500</contentid>
+    <contenttypeid>12</contenttypeid>
+    <createdtime>20190826233449</createdtime>
+    <firstimage>http://tong.visitkorea.or.kr/cms/resource/97/2616497_image2_1.bmp</firstimage>
+    <firstimage2>http://tong.visitkorea.or.kr/cms/resource/97/2616497_image2_1.bmp</firstimage2>
+    <cpyrhtDivCd>Type3</cpyrhtDivCd>
+    <mapx>127.0564445744</mapx>
+    <mapy>38.0461581003</mapy>
+    <mlevel>6</mlevel>
+    <modifiedtime>20250320134352</modifiedtime>
+    <sigungucode>21</sigungucode>
+    <tel></tel>
+    <title>은대리 판상절리와 습곡구조 (한탄강 유네스코 세계지질공원)</title>
+    <zipcode>11024</zipcode>
+  </item>
+  <item>
+    <addr1>경기도 연천군 중면 삼곶리</addr1>
+    <addr2>422</addr2>
+    <areacode>31</areacode>
+    <cat1>A01</cat1>
+    <cat2>A0101</cat2>
+    <cat3>A01010700</cat3>
+    <contentid>2841245</contentid>
+    <contenttypeid>12</contenttypeid>
+    <createdtime>20220823100353</createdtime>
+    <firstimage>http://tong.visitkorea.or.kr/cms/resource/95/3092295_image2_1.jpg</firstimage>
+    <firstimage2>http://tong.visitkorea.or.kr/cms/resource/95/3092295_image3_1.jpg</firstimage2>
+    <cpyrhtDivCd>Type1</cpyrhtDivCd>
+    <mapx>127.0171734736</mapx>
+    <mapy>38.1313446498</mapy>
+    <mlevel>6</mlevel>
+    <modifiedtime>20250904155051</modifiedtime>
+    <sigungucode>21</sigungucode>
+    <tel></tel>
+    <title>임진강 댑싸리정원</title>
+    <zipcode>11004</zipcode>
+  </item>
+  <item>
+    <addr1>경기도 연천군 미산면 동이리</addr1>
+    <addr2></addr2>
+    <areacode>31</areacode>
+    <cat1>A01</cat1>
+    <cat2>A0101</cat2>
+    <cat3>A01010500</cat3>
+    <contentid>2569474</contentid>
+    <contenttypeid>12</contenttypeid>
+    <createdtime>20181124225643</createdtime>
+    <firstimage></firstimage>
+    <firstimage2></firstimage2>
+    <cpyrhtDivCd></cpyrhtDivCd>
+    <mapx>127.0154490945</mapx>
+    <mapy>38.0199326406</mapy>
+    <mlevel>6</mlevel>
+    <modifiedtime>20250318143252</modifiedtime>
+    <sigungucode>21</sigungucode>
+    <tel></tel>
+    <title>임진강 주상절리 (한탄강 유네스코 세계지질공원)</title>
+    <zipcode>11047</zipcode>
+  </item>
+  <item>
+    <addr1>경기도 연천군 중면 횡산리 224</addr1>
+    <addr2></addr2>
+    <areacode>31</areacode>
+    <cat1>A01</cat1>
+    <cat2>A0101</cat2>
+    <cat3>A01010500</cat3>
+    <contentid>2569460</contentid>
+    <contenttypeid>12</contenttypeid>
+    <createdtime>20181124033008</createdtime>
+    <firstimage>http://tong.visitkorea.or.kr/cms/resource/54/2563654_image2_1.jpg</firstimage>
+    <firstimage2>http://tong.visitkorea.or.kr/cms/resource/54/2563654_image3_1.jpg</firstimage2>
+    <cpyrhtDivCd>Type3</cpyrhtDivCd>
+    <mapx>126.9873487890</mapx>
+    <mapy>38.1191510887</mapy>
+    <mlevel>6</mlevel>
+    <modifiedtime>20241204160609</modifiedtime>
+    <sigungucode>21</sigungucode>
+    <tel></tel>
+    <title>임진강평화습지원</title>
+    <zipcode>11004</zipcode>
+  </item>
+  <item>
+    <addr1>경기도 연천군 연천읍 부곡리 192</addr1>
+    <addr2></addr2>
+    <areacode>31</areacode>
+    <cat1>A01</cat1>
+    <cat2>A0101</cat2>
+    <cat3>A01010800</cat3>
+    <contentid>125496</contentid>
+    <contenttypeid>12</contenttypeid>
+    <createdtime>20040225090000</createdtime>
+    <firstimage>http://tong.visitkorea.or.kr/cms/resource/05/3532805_image2_1.jpg</firstimage>
+    <firstimage2>http://tong.visitkorea.or.kr/cms/resource/05/3532805_image3_1.jpg</firstimage2>
+    <cpyrhtDivCd>Type1</cpyrhtDivCd>
+    <mapx>127.1427246484</mapx>
+    <mapy>38.0772227105</mapy>
+    <mlevel>6</mlevel>
+    <modifiedtime>20250909173100</modifiedtime>
+    <sigungucode>21</sigungucode>
+    <tel></tel>
+    <title>재인폭포 (한탄강 유네스코 세계지질공원)</title>
+    <zipcode>11018</zipcode>
+  </item>
+  <item>
+    <addr1>경기도 연천군 연천읍 고문리</addr1>
+    <addr2></addr2>
+    <areacode>31</areacode>
+    <cat1>A01</cat1>
+    <cat2>A0101</cat2>
+    <cat3>A01010800</cat3>
+    <contentid>2843976</contentid>
+    <contenttypeid>12</contenttypeid>
+    <createdtime>20220825100444</createdtime>
+    <firstimage>http://tong.visitkorea.or.kr/cms/resource/38/2843938_image2_1.jpg</firstimage>
+    <firstimage2>http://tong.visitkorea.or.kr/cms/resource/38/2843938_image3_1.jpg</firstimage2>
+    <cpyrhtDivCd>Type3</cpyrhtDivCd>
+    <mapx>127.1413164638</mapx>
+    <mapy>38.0765560961</mapy>
+    <mlevel>6</mlevel>
+    <modifiedtime>20250702091117</modifiedtime>
+    <sigungucode>21</sigungucode>
+    <tel></tel>
+    <title>재인폭포 출렁다리</title>
+    <zipcode>11018</zipcode>
+  </item>
+</items>  <numOfRows>12</numOfRows>
+  <pageNo>1</pageNo>
+  <totalCount>15</totalCount>
+</body></response>`;
+
+/* =======================
+   2) 파싱해서 내부 데이터로 변환
+   ======================= */
+function parseXMLToPlaces(xmlStr){
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(xmlStr, 'application/xml');
+  const items = Array.from(doc.getElementsByTagName('item'));
+  const out = items.map(it=>{
+    const g = tag => {
+      const el = it.getElementsByTagName(tag)[0];
+      return el ? el.textContent.trim() : '';
+    };
+    // 이미지 https 변환 시도
+    let img = g('firstimage') || '';
+    if (img && img.startsWith('http://')) img = img.replace('http://','https://');
+    const lon = parseFloat(g('mapx')||NaN);
+    const lat = parseFloat(g('mapy')||NaN);
+    return {
+      id: g('contentid') || (Math.random()+''),
+      name: g('title') || '무제',
+      addr: g('addr1') || '',
+      lat: isFinite(lat)?lat:null,
+      lon: isFinite(lon)?lon:null,
+      img: img,
+      raw: it
+    };
+  }).filter(p => p.lat && p.lon);
+  return out;
+}
+
+/* =======================
+   3) UI/지도 초기화 및 렌더링
+   ======================= */
+let places = parseXMLToPlaces(xmlText);
+let map = L.map('map').setView([38.06,127.06], 11);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap'}).addTo(map);
+let markers = {}; let routeLine = null;
+
+function renderPlaceList(){
+  const container = document.getElementById('places'); container.innerHTML='';
+  places.forEach(p=>{
+    const el = document.createElement('div'); el.className='place';
+    const img = p.img ? p.img : 'https://via.placeholder.com/320x240?text=No+Image';
+    el.innerHTML = `<input type="checkbox" data-id="${p.id}" style="width:18px;height:18px">
+      <img src="${img}" alt="${p.name}" onerror="this.src='https://via.placeholder.com/320x240?text=No+Image'">
+      <div class="meta"><b>${escapeHtml(p.name)}</b><div class="small">${escapeHtml(p.addr)}</div></div>`;
+    // 클릭하면 체크토글
+    el.addEventListener('click', (e)=>{ if(e.target.tagName!=='INPUT'){ const cb = el.querySelector('input'); cb.checked = !cb.checked; updateStartSelect(); }});
+    container.appendChild(el);
+  });
+  renderMarkers();
+  updateStartSelect();
+}
+
+function renderMarkers(){
+  // remove old
+  Object.values(markers).forEach(m => map.removeLayer(m));
+  markers = {};
+  places.forEach(p=>{
+    const m = L.marker([p.lat,p.lon]).addTo(map);
+    const popup = `<strong>${escapeHtml(p.name)}</strong><br>${escapeHtml(p.addr)}${p.img?`<br><img src="${p.img}" style="width:160px;margin-top:6px;border-radius:6px" onerror="this.style.display='none'">`:''}<br><a href="#" onclick="zoomTo('${p.id}');return false">지도에서 보기</a>`;
+    m.bindPopup(popup);
+    m.on('click', ()=> showDetail(p.id));
+    markers[p.id]=m;
+  });
+}
+
+function zoomTo(id){ const p = places.find(x=>x.id==id); if(!p) return; map.setView([p.lat,p.lon],13); markers[id].openPopup(); showDetail(id); }
+
+function showDetail(id){
+  const p = places.find(x=>x.id==id); if(!p) return;
+  alert(`${p.name}\n${p.addr}\n위도:${p.lat.toFixed(6)} 경도:${p.lon.toFixed(6)}`);
+}
+
+/* =======================
+   4) 선택/검색/시작지 관리
+   ======================= */
+function getCheckedPlaces(){
+  const checks = Array.from(document.querySelectorAll('#places input[type=checkbox]')).filter(c=>c.checked);
+  return checks.map(c=>places.find(p=>p.id===c.dataset.id)).filter(Boolean);
+}
+
+function updateStartSelect(){
+  const sel = document.getElementById('start-select'); sel.innerHTML='';
+  const selected = getCheckedPlaces();
+  selected.forEach(p=>{ const o=document.createElement('option'); o.value=p.id; o.text=p.name; sel.appendChild(o); });
+  // if none, fill all as option
+  if(sel.options.length===0){
+    places.forEach(p=>{ const o=document.createElement('option'); o.value=p.id; o.text=p.name; sel.appendChild(o); });
+  }
+}
+
+/* 전체선택 / 해제 */
+document.getElementById('btn-select-all').addEventListener('click', ()=>{
+  document.querySelectorAll('#places input[type=checkbox]').forEach(i=>i.checked=true);
+  updateStartSelect();
+});
+document.getElementById('btn-clear-all').addEventListener('click', ()=>{
+  document.querySelectorAll('#places input[type=checkbox]').forEach(i=>i.checked=false);
+  updateStartSelect();
+});
+
+/* 검색 */
+document.getElementById('btn-search').addEventListener('click', ()=> {
+  const q = document.getElementById('q').value.trim().toLowerCase();
+  if(!q) return alert('검색어 입력');
+  const found = places.find(p => p.name.toLowerCase().includes(q) || p.addr.toLowerCase().includes(q));
+  if(!found) return alert('검색 결과가 없습니다.');
+  // 스크롤 및 하이라이트
+  const inputs = document.querySelectorAll('#places .place');
+  inputs.forEach(div=>{
+    if(div.textContent.toLowerCase().includes(q)){ div.scrollIntoView({behavior:'smooth',block:'center'}); div.style.boxShadow='0 2px 10px rgba(11,99,184,0.12)'; setTimeout(()=>div.style.boxShadow='none',1200); }
+  });
+});
+
+/* =======================
+   5) 추천 알고리즘 (Nearest Neighbor) + 현재 위치 옵션
+   ======================= */
+function haversine(a,b){
+  const toRad = v => v*Math.PI/180;
+  const R = 6371; // km
+  const dLat = toRad(b.lat-a.lat); const dLon = toRad(b.lon-a.lon);
+  const la = toRad(a.lat), lb = toRad(b.lat);
+  const A = Math.sin(dLat/2)**2 + Math.cos(la)*Math.cos(lb)*Math.sin(dLon/2)**2;
+  return 2*R*Math.atan2(Math.sqrt(A), Math.sqrt(1-A));
+}
+
+async function recommend(){
+  const mode = document.getElementById('start-mode').value;
+  let selected = getCheckedPlaces();
+  if(selected.length < 2) return alert('최소 2개 이상의 장소를 선택하세요.');
+  let startPt = null;
+
+  if(mode === 'current'){
+    // 현재 위치 가져오기
+    try {
+      const pos = await new Promise((res,rej)=>{
+        navigator.geolocation.getCurrentPosition(p=>res(p),e=>rej(e),{enableHighAccuracy:true,timeout:10000});
+      });
+      startPt = { id:'__me', name:'현재위치', lat: pos.coords.latitude, lon: pos.coords.longitude };
+    } catch(e){
+      return alert('현재 위치를 사용할 수 없습니다. (권한 거부 또는 지원 안됨)');
+    }
+  } else {
+    const sid = document.getElementById('start-select').value;
+    startPt = selected.find(p=>p.id===sid) || places.find(p=>p.id===sid);
+    if(!startPt) return alert('시작지를 선택하세요.');
+    // ensure start is in route and remove duplicate from selected copy
+    selected = selected.filter(p => p.id !== startPt.id);
+  }
+
+  // Nearest Neighbor
+  const route = [startPt];
+  const rest = selected.slice();
+  while(rest.length){
+    const last = route[route.length-1];
+    rest.sort((a,b)=> haversine(last,a) - haversine(last,b));
+    route.push(rest.shift());
+  }
+
+  drawRoute(route);
+}
+
+/* =======================
+   6) draw & UI
+   ======================= */
+function drawRoute(route){
+  // remove existing
+  if(routeLine) { map.removeLayer(routeLine); routeLine=null; }
+  // markers: ensure all route points have marker; add temporary marker for current loc
+  const latlngs = route.map(r => [r.lat, r.lon]);
+  routeLine = L.polyline(latlngs, {color:'#0B63B8', weight:5, opacity:0.9}).addTo(map);
+  map.fitBounds(routeLine.getBounds().pad(0.15));
+  // route list
+  const ol = document.getElementById('route-list'); ol.innerHTML='';
+  let total = 0;
+  for(let i=0;i<route.length;i++){
+    const li = document.createElement('li'); li.className='route-item';
+    li.textContent = `${i+1}. ${route[i].name} ${route[i].addr? ' — ' + route[i].addr : ''}`;
+    li.addEventListener('click', ()=> { if(route[i].id!=='__me') zoomTo(route[i].id); else map.setView([route[i].lat,route[i].lon],13); });
+    ol.appendChild(li);
+    if(i>0) total += haversine(route[i-1], route[i]);
+  }
+  document.getElementById('total-dist').textContent = total.toFixed(2) + ' km';
+  document.getElementById('route-box').style.display = 'block';
+}
+
+/* clear route */
+document.getElementById('btn-clear-route').addEventListener('click', ()=>{ if(routeLine){ map.removeLayer(routeLine); routeLine=null; } document.getElementById('route-box').style.display='none'; });
+
+/* bind recommend button */
+document.getElementById('btn-recommend').addEventListener('click', ()=>{ recommend(); });
+
+/* init list */
+renderPlaceList();
+
+/* escape helper */
+function escapeHtml(s){ return (s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]); }
+</script>
+</body>
 </html>
