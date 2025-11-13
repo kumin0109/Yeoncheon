@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>연천군 관광지 — 모든 관광지 표시 + 선택 기반 추천 코스</title>
+<title>연천군 관광지 — 추천 코스 (빨간 경로 + 총 시간)</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <style>
   :root{--primary:#0B63B8;--muted:#F1F6F9;--card:#fff;--text:#222}
@@ -27,6 +27,7 @@
   .small{font-size:13px;color:#666}
   .route-list li{padding:8px;background:var(--muted);border-radius:8px;margin-bottom:6px;list-style:none}
   .mode-select{padding:8px;border-radius:8px;border:1px solid #eee}
+  #route-summary { margin-top:10px; padding:10px; background:#fff9f9; border-radius:8px; border:1px solid #ffe6e6; }
   footer{max-width:1200px;margin:18px auto;text-align:center;color:#666;font-size:13px}
   @media(max-width:980px){.layout{grid-template-columns:1fr} .panel{height:auto} #map{height:420px}}
 </style>
@@ -83,7 +84,7 @@
       <div id="route-box" style="display:none">
         <h4>추천 루트</h4>
         <ol id="route-list" class="route-list"></ol>
-        <div style="margin-top:8px">총 이동거리(직선 합): <b id="total-dist">0 km</b></div>
+        <div id="route-summary"></div>
       </div>
     </aside>
   </div>
@@ -91,9 +92,13 @@
 
 <footer>데모: 제공하신 XML 데이터로 작동합니다. 이미지가 보이지 않으면 http→https 제한 때문입니다.</footer>
 
+<!-- Leaflet -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
 <script>
-/* 전체 XML(사용자가 제공한 내용) — 여기 전체 내용을 그대로 넣었습니다 */
+/* =========================
+   데이터 (전체 XML)
+   ========================= */
 const xmlText = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><response><header>
   <resultCode>0000</resultCode>
   <resultMsg>OK</resultMsg>
@@ -119,11 +124,6 @@ const xmlText = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><respons
     <tel></tel>
     <title>고대산</title>
     <zipcode>11000</zipcode>
-    <lDongRegnCd>41</lDongRegnCd>
-    <lDongSignguCd>800</lDongSignguCd>
-    <lclsSystm1>NA</lclsSystm1>
-    <lclsSystm2>NA01</lclsSystm2>
-    <lclsSystm3>NA010100</lclsSystm3>
   </item>
   <item>
     <addr1>경기도 연천군 신서면 고대산길 84-79</addr1>
@@ -146,11 +146,6 @@ const xmlText = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><respons
     <tel></tel>
     <title>고대산자연휴양림</title>
     <zipcode>11001</zipcode>
-    <lDongRegnCd>41</lDongRegnCd>
-    <lDongSignguCd>800</lDongSignguCd>
-    <lclsSystm1>NA</lclsSystm1>
-    <lclsSystm2>NA04</lclsSystm2>
-    <lclsSystm3>NA040600</lclsSystm3>
   </item>
   <item>
     <addr1>경기도 연천군 연천읍 동막리</addr1>
@@ -173,11 +168,6 @@ const xmlText = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><respons
     <tel></tel>
     <title>동막골 응회암 (한탄강 유네스코 세계지질공원)</title>
     <zipcode>11011</zipcode>
-    <lDongRegnCd>41</lDongRegnCd>
-    <lDongSignguCd>800</lDongSignguCd>
-    <lclsSystm1>NA</lclsSystm1>
-    <lclsSystm2>NA04</lclsSystm2>
-    <lclsSystm3>NA040400</lclsSystm3>
   </item>
   <item>
     <addr1>경기도 연천군 연천읍 고문리</addr1>
@@ -200,11 +190,6 @@ const xmlText = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><respons
     <tel></tel>
     <title>백의리층 (한탄강 유네스코 세계지질공원)</title>
     <zipcode>11018</zipcode>
-    <lDongRegnCd>41</lDongRegnCd>
-    <lDongSignguCd>800</lDongSignguCd>
-    <lclsSystm1>NA</lclsSystm1>
-    <lclsSystm2>NA03</lclsSystm2>
-    <lclsSystm3>NA030500</lclsSystm3>
   </item>
   <item>
     <addr1>경기도 연천군 신서면 평화로 3282-76</addr1>
@@ -227,11 +212,6 @@ const xmlText = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><respons
     <tel></tel>
     <title>역고드름</title>
     <zipcode>11001</zipcode>
-    <lDongRegnCd>41</lDongRegnCd>
-    <lDongSignguCd>800</lDongSignguCd>
-    <lclsSystm1>NA</lclsSystm1>
-    <lclsSystm2>NA04</lclsSystm2>
-    <lclsSystm3>NA040500</lclsSystm3>
   </item>
   <item>
     <addr1>경기도 연천군 청산면 초성리</addr1>
@@ -254,11 +234,6 @@ const xmlText = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><respons
     <tel></tel>
     <title>열두개울</title>
     <zipcode>11023</zipcode>
-    <lDongRegnCd>41</lDongRegnCd>
-    <lDongSignguCd>800</lDongSignguCd>
-    <lclsSystm1>NA</lclsSystm1>
-    <lclsSystm2>NA01</lclsSystm2>
-    <lclsSystm3>NA010400</lclsSystm3>
   </item>
   <item>
     <addr1>경기도 연천군 전곡읍 은대리</addr1>
@@ -281,11 +256,6 @@ const xmlText = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><respons
     <tel></tel>
     <title>은대리 판상절리와 습곡구조 (한탄강 유네스코 세계지질공원)</title>
     <zipcode>11024</zipcode>
-    <lDongRegnCd>41</lDongRegnCd>
-    <lDongSignguCd>800</lDongSignguCd>
-    <lclsSystm1>NA</lclsSystm1>
-    <lclsSystm2>NA04</lclsSystm2>
-    <lclsSystm3>NA040500</lclsSystm3>
   </item>
   <item>
     <addr1>경기도 연천군 중면 삼곶리</addr1>
@@ -308,11 +278,6 @@ const xmlText = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><respons
     <tel></tel>
     <title>임진강 댑싸리정원</title>
     <zipcode>11004</zipcode>
-    <lDongRegnCd>41</lDongRegnCd>
-    <lDongSignguCd>800</lDongSignguCd>
-    <lclsSystm1>NA</lclsSystm1>
-    <lclsSystm2>NA04</lclsSystm2>
-    <lclsSystm3>NA040700</lclsSystm3>
   </item>
   <item>
     <addr1>경기도 연천군 미산면 동이리</addr1>
@@ -335,11 +300,6 @@ const xmlText = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><respons
     <tel></tel>
     <title>임진강 주상절리 (한탄강 유네스코 세계지질공원)</title>
     <zipcode>11047</zipcode>
-    <lDongRegnCd>41</lDongRegnCd>
-    <lDongSignguCd>800</lDongSignguCd>
-    <lclsSystm1>NA</lclsSystm1>
-    <lclsSystm2>NA04</lclsSystm2>
-    <lclsSystm3>NA040400</lclsSystm3>
   </item>
   <item>
     <addr1>경기도 연천군 중면 횡산리 224</addr1>
@@ -362,11 +322,6 @@ const xmlText = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><respons
     <tel></tel>
     <title>임진강평화습지원</title>
     <zipcode>11004</zipcode>
-    <lDongRegnCd>41</lDongRegnCd>
-    <lDongSignguCd>800</lDongSignguCd>
-    <lclsSystm1>NA</lclsSystm1>
-    <lclsSystm2>NA03</lclsSystm2>
-    <lclsSystm3>NA030400</lclsSystm3>
   </item>
   <item>
     <addr1>경기도 연천군 연천읍 부곡리 192</addr1>
@@ -417,9 +372,9 @@ const xmlText = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><respons
   <totalCount>15</totalCount>
 </body></response>`;
 
-/* ---------------------------
-   파싱 + 기본 데이터 구조
-   --------------------------- */
+/* =========================
+   파싱 + 데이터
+   ========================= */
 function parseXMLToPlaces(xmlStr){
   const parser = new DOMParser();
   const doc = parser.parseFromString(xmlStr, 'application/xml');
@@ -444,18 +399,18 @@ function parseXMLToPlaces(xmlStr){
   }).filter(p=>p.lat && p.lon);
 }
 
-/* ---------------------------
-   지도 초기화
-   --------------------------- */
+/* =========================
+   지도 초기화 (모든 마커 초기에 표시)
+   ========================= */
 const places = parseXMLToPlaces(xmlText);
 const map = L.map('map').setView([38.06,127.06], 11);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap'}).addTo(map);
 let markers = {}; // id -> marker
 let routeLine = null;
 
-/* ---------------------------
-   렌더링: 리스트 + 마커(모두 생성)
-   --------------------------- */
+/* =========================
+   렌더링: 리스트 + 마커(초기 생성)
+   ========================= */
 function renderPlaceList(){
   const container = document.getElementById('places'); container.innerHTML='';
   places.forEach(p=>{
@@ -466,20 +421,18 @@ function renderPlaceList(){
       <img src="${p.img || 'https://via.placeholder.com/320x240?text=No+Image'}" alt="${escapeHtml(p.name)}" onerror="this.src='https://via.placeholder.com/320x240?text=No+Image'">
       <div class="meta"><b>${escapeHtml(p.name)}</b><div class="small">${escapeHtml(p.addr)}</div></div>
     `;
-    // 클릭하면 마커 포커스
     el.addEventListener('click', (e) => {
       if (e.target.tagName === 'INPUT') { updateRecommendButton(); updateStartSelect(); return; }
       focusMarker(p.id);
     });
     container.appendChild(el);
   });
-  // 모든 마커 생성 (초기)
   places.forEach(p => ensureMarker(p.id));
   updateStartSelect();
   updateRecommendButton();
 }
 
-/* 마커 생성/바인딩 */
+/* 마커 생성 */
 function ensureMarker(id){
   if (markers[id]) return markers[id];
   const p = places.find(x => x.id === id);
@@ -488,30 +441,36 @@ function ensureMarker(id){
   const imgHtml = p.img ? `<br><img src="${p.img}" style="width:160px;border-radius:6px;margin-top:6px" onerror="this.style.display='none'">` : '';
   m.bindPopup(`<strong>${escapeHtml(p.name)}</strong><br>${escapeHtml(p.addr)}${imgHtml}`);
   m.on('click', ()=> {
-    // 클릭하면 카드 스크롤 및 하이라이트
     const card = document.querySelector(`#places .place[data-id="${id}"]`);
     if (card){ card.scrollIntoView({behavior:'smooth',block:'center'}); card.style.boxShadow='0 2px 14px rgba(11,99,184,0.12)'; setTimeout(()=>card.style.boxShadow='',900); }
   });
   markers[id] = m;
   return m;
 }
+
+/* 포커스 (전역 사용 가능하도록 노출) */
 function focusMarker(id){
   const m = ensureMarker(id);
   if (m){ map.setView(m.getLatLng(), 13); m.openPopup(); }
 }
+window.focusMarker = focusMarker;
 
-/* ---------------------------
-   선택/추천 관련
-   --------------------------- */
+/* =========================
+   선택/추천 관련 (전역 노출)
+   ========================= */
 function getCheckedPlaces(){
   const checks = Array.from(document.querySelectorAll('#places input[type=checkbox]')).filter(c=>c.checked);
   return checks.map(c=>places.find(p=>p.id===c.dataset.id)).filter(Boolean);
 }
+window.getCheckedPlaces = getCheckedPlaces;
+
 function updateRecommendButton(){
   const selected = getCheckedPlaces();
   const btn = document.getElementById('btn-recommend');
   btn.disabled = selected.length < 2;
 }
+window.updateRecommendButton = updateRecommendButton;
+
 function updateStartSelect(){
   const sel = document.getElementById('start-select'); sel.innerHTML='';
   const selected = getCheckedPlaces();
@@ -520,6 +479,8 @@ function updateStartSelect(){
     places.forEach(p=>{ const o=document.createElement('option'); o.value=p.id; o.text=p.name; sel.appendChild(o); });
   }
 }
+window.updateStartSelect = updateStartSelect;
+
 document.getElementById('btn-select-all').addEventListener('click', ()=>{
   document.querySelectorAll('#places input[type=checkbox]').forEach(i=>i.checked=true);
   updateRecommendButton(); updateStartSelect();
@@ -541,10 +502,12 @@ document.getElementById('btn-search').addEventListener('click', ()=> {
   if (el){ el.scrollIntoView({behavior:'smooth',block:'center'}); el.style.boxShadow='0 2px 16px rgba(11,99,184,0.12)'; setTimeout(()=>el.style.boxShadow='',1200); }
 });
 
-/* ---------------------------
-   추천 알고리즘 (Nearest Neighbor)
-   --------------------------- */
-const SPEED = { car: 50, bike: 15, walk: 5 };
+/* =========================
+   추천 알고리즘 (Nearest Neighbor) + 경로 그리기(빨간색)
+   + 총 거리 및 총 소요시간(도보/자전거/자차)
+   ========================= */
+const SPEED = { car: 60, bike: 15, walk: 4 }; // km/h (평균속도 가정)
+
 function haversine(a,b){
   const toRad = v => v*Math.PI/180;
   const R = 6371;
@@ -557,7 +520,6 @@ function haversine(a,b){
 async function recommend(){
   let selected = getCheckedPlaces();
   if (selected.length < 2) return alert('최소 2개 이상 선택하세요.');
-  const mode = document.getElementById('mode').value;
   let startObj = null;
 
   if (document.getElementById('start-mode').value === 'current'){
@@ -575,6 +537,7 @@ async function recommend(){
     selected = selected.filter(p => p.id !== startObj.id);
   }
 
+  // NN
   const route = [startObj];
   const rest = selected.slice();
   while(rest.length){
@@ -583,38 +546,59 @@ async function recommend(){
     route.push(rest.shift());
   }
 
-  drawRouteWithTimes(route, document.getElementById('mode').value);
+  drawRouteWithTimes(route);
 }
+window.recommend = recommend;
 
-/* ---------------------------
-   draw route & show times
-   --------------------------- */
-function drawRouteWithTimes(route, mode){
+function drawRouteWithTimes(route){
+  // remove existing route
   if (routeLine) { map.removeLayer(routeLine); routeLine = null; }
-  // ensure markers for all non-__me
+
+  // ensure markers
   route.forEach(r=>{ if (r.id !== '__me') ensureMarker(r.id); });
+
   const latlngs = route.map(r=>[r.lat,r.lon]);
-  routeLine = L.polyline(latlngs, {color:'#0B63B8', weight:5, opacity:0.9}).addTo(map);
+  // <-- **빨간색 선** -->
+  routeLine = L.polyline(latlngs, {color:'red', weight:5, opacity:0.95}).addTo(map);
   map.fitBounds(routeLine.getBounds().pad(0.15));
 
+  // 총 거리
+  let total = 0;
+  for (let i=1;i<route.length;i++){
+    total += haversine(route[i-1], route[i]);
+  }
+
+  // 총 시간 계산(각 이동수단)
+  const totals = {};
+  for (const k of Object.keys(SPEED)){
+    const hours = total / SPEED[k];
+    totals[k] = { hours, mins: Math.round(hours*60) };
+  }
+
+  // 각 구간 별 거리/시간(선택 항목별 상세)은 기존 항목 표시로 유지
   const ol = document.getElementById('route-list'); ol.innerHTML='';
-  let total = 0; let totalTime = 0;
-  const spd = SPEED[mode] || 5;
   for (let i=0;i<route.length;i++){
     const li = document.createElement('li');
     if (i===0){
       li.textContent = `1. 출발 — ${route[i].name}`;
     } else {
       const d = haversine(route[i-1], route[i]);
-      const tHours = d / spd;
-      const mins = Math.round(tHours * 60);
-      total += d; totalTime += tHours;
-      li.innerHTML = `${i+1}. ${escapeHtml(route[i].name)} <div style="font-size:13px;color:#444;margin-top:6px">거리: <strong>${d.toFixed(2)} km</strong> · 예상 소요: <strong>${formatMinutes(mins)}</strong></div>`;
+      li.innerHTML = `${i+1}. ${escapeHtml(route[i].name)} <div style="font-size:13px;color:#444;margin-top:6px">거리: <strong>${d.toFixed(2)} km</strong></div>`;
     }
     li.addEventListener('click', ()=> { if(route[i].id === '__me') map.setView([route[i].lat,route[i].lon],13); else focusMarker(route[i].id); });
     ol.appendChild(li);
   }
-  document.getElementById('total-dist').textContent = total.toFixed(2) + ' km';
+
+  // 요약 표시 (총 거리 + 각 이동수단 총 시간)
+  const sumBox = document.getElementById('route-summary');
+  sumBox.innerHTML = `
+    <div><strong>총 거리:</strong> ${total.toFixed(2)} km</div>
+    <div style="margin-top:8px">
+      <div>🚶 도보: <strong>${totals.walk.mins} 분</strong> (${totals.walk.hours.toFixed(2)} 시간)</div>
+      <div>🚴 자전거: <strong>${totals.bike.mins} 분</strong> (${totals.bike.hours.toFixed(2)} 시간)</div>
+      <div>🚗 자차: <strong>${totals.car.mins} 분</strong> (${totals.car.hours.toFixed(2)} 시간)</div>
+    </div>
+  `;
   document.getElementById('route-box').style.display = 'block';
 }
 
@@ -633,5 +617,154 @@ renderPlaceList();
 function formatMinutes(mins){ if(mins<60) return `${mins} 분`; const h=Math.floor(mins/60); const m=mins%60; return `${h}시간 ${m}분`; }
 function escapeHtml(s){ return (s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]); }
 </script>
+
+<!-- ========== 간단한 챗봇 (불필요 문구 정리) ========== -->
+<style>
+#chatbot-btn { position: fixed; right: 22px; bottom: 22px; z-index: 99999;
+  width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#0B63B8,#2E8B57);
+  color:#fff;border:none;box-shadow:0 6px 18px rgba(11,99,184,0.18);cursor:pointer;font-size:20px }
+#chatbot-panel { position: fixed; right: 22px; bottom: 86px; z-index: 99999;
+  width:340px; max-height:62vh; background:#fff; border-radius:12px; box-shadow:0 12px 30px rgba(8,40,70,0.12);
+  display:none; flex-direction:column; overflow:hidden; font-family: "Noto Sans KR", sans-serif; }
+#chatbot-header { padding:12px 14px; background:linear-gradient(90deg,#0B63B8,#2E8B57); color:#fff; }
+#chatbot-messages { padding:12px; overflow:auto; flex:1; }
+.msg { margin-bottom:10px; max-width:86%; line-height:1.4; }
+.msg.bot { background:#f1f6ff; color:#1b2838; padding:10px 12px; border-radius:10px; }
+.msg.user { margin-left:auto; background:#0B63B8; color:#fff; padding:8px 12px; border-radius:10px; }
+#chatbot-input { display:flex; gap:8px; padding:10px; border-top:1px solid #eee; }
+#chatbot-input input { flex:1; padding:9px;border-radius:8px;border:1px solid #e6eef9 }
+#chatbot-input button { padding:8px 10px;border-radius:8px;border:none;background:#0B63B8;color:#fff;cursor:pointer }
+.small-muted { font-size:12px;color:#666;margin-top:6px }
+</style>
+
+<button id="chatbot-btn" title="챗봇 열기">💬</button>
+
+<div id="chatbot-panel" role="dialog" aria-label="챗봇">
+  <div id="chatbot-header"><strong>연천 안내 챗봇</strong><div style="font-size:12px;opacity:.9">관광지 검색 · 루트 생성 지원</div></div>
+  <div id="chatbot-messages"></div>
+  <div id="chatbot-input">
+    <input id="chatbot-text" placeholder="예: '재인폭포 알려줘', 'A와 B 추천해줘'">
+    <button id="chatbot-send">보내기</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  const btn = document.getElementById('chatbot-btn');
+  const panel = document.getElementById('chatbot-panel');
+  const messages = document.getElementById('chatbot-messages');
+  const input = document.getElementById('chatbot-text');
+  const send = document.getElementById('chatbot-send');
+
+  const PLACES = window.places || [];
+
+  btn.addEventListener('click', ()=> panel.style.display = panel.style.display === 'flex' ? 'none' : 'flex');
+  panel.style.display = 'none';
+  panel.style.flexDirection = 'column';
+
+  function pushUser(text){
+    const d = document.createElement('div'); d.className='msg user'; d.textContent = text;
+    messages.appendChild(d); messages.scrollTop = messages.scrollHeight;
+  }
+  function pushBot(html){
+    const d = document.createElement('div'); d.className='msg bot'; d.innerHTML = html;
+    messages.appendChild(d); messages.scrollTop = messages.scrollHeight;
+  }
+
+  pushBot("안녕하세요 — 관광지 검색과 선택 기반 추천루트를 도와드립니다.");
+
+  function handleText(raw){
+    const text = (raw||'').trim();
+    if(!text) { pushBot('무엇을 도와드릴까요?'); return; }
+    pushUser(text);
+    const lower = text.toLowerCase();
+
+    if (/^(안녕|안녕하세요|hi|hello)/i.test(lower)) {
+      pushBot('안녕하세요. 관광지 이름을 입력하거나 "A와 B 추천해줘"처럼 말해보세요.');
+      return;
+    }
+
+    if (/추천|루트|경로|코스/.test(lower)) {
+      const mentioned = findPlacesInText(lower);
+      if (mentioned.length >= 2) {
+        // 체크박스로 선택 후 추천 트리거 (불필요 문구 제거: 간결히 처리)
+        const allChecks = document.querySelectorAll('#places input[type=checkbox]');
+        allChecks.forEach(cb => { cb.checked = mentioned.some(p=>p.id===cb.dataset.id); });
+        if (typeof updateRecommendButton === 'function') updateRecommendButton();
+        if (typeof updateStartSelect === 'function') updateStartSelect();
+        const recommendBtn = document.getElementById('btn-recommend');
+        if (recommendBtn && !recommendBtn.disabled) { recommendBtn.click(); pushBot('추천루트를 생성했습니다.'); }
+        else pushBot('추천을 실행하려면 2개 이상 선택되어야 합니다.');
+        return;
+      }
+      const selected = (typeof getCheckedPlaces === 'function') ? getCheckedPlaces() : [];
+      if (selected.length >= 2) {
+        document.getElementById('btn-recommend').click();
+        pushBot('선택된 장소로 추천루트를 생성합니다.');
+      } else {
+        pushBot('장소를 2곳 이상 지정해주세요 (예: "재인폭포와 임진강 추천").');
+      }
+      return;
+    }
+
+    if (/알려줘|정보|위치|주소|전화|사진|이미지/.test(lower)) {
+      const matches = findPlacesInText(lower);
+      if (matches.length===0) {
+        const substr = lower.replace(/(알려줘|정보|위치|주소|전화|사진|이미지)/g,'').trim();
+        if (substr.length >= 2) {
+          const approx = PLACES.filter(p => (p.name||'').toLowerCase().includes(substr) || (p.addr||'').toLowerCase().includes(substr));
+          if (approx.length) return pushBot(renderPlaceListHtml(approx.slice(0,6)));
+        }
+        return pushBot('장소명을 좀 더 정확히 입력해 주세요. 예: "재인폭포"');
+      }
+      return pushBot(renderPlaceListHtml(matches));
+    }
+
+    if (/길찾기|가는 방법|가는 법|어떻게 가/.test(lower)) {
+      const matches = findPlacesInText(lower);
+      if (matches.length>=1) {
+        const m = matches[0];
+        const url = `https://www.google.com/maps/dir/?api=1&destination=${m.lat},${m.lon}`;
+        pushBot(`"${m.name}" 길찾기: <a class="chat-link" target="_blank" href="${url}">열기</a>`);
+      } else pushBot('길찾기하려면 장소명을 포함해 주세요.');
+      return;
+    }
+
+    // 기본 퍼지 검색
+    const fuzzy = PLACES.filter(p => (p.name||'').toLowerCase().includes(lower) || (p.addr||'').toLowerCase().includes(lower));
+    if (fuzzy.length) return pushBot(renderPlaceListHtml(fuzzy.slice(0,6)));
+
+    pushBot('잘 이해하지 못했습니다. 장소명이나 "A,B 추천" 형태로 시도해 주세요.');
+  }
+
+  function findPlacesInText(text){
+    const results = [];
+    for (const p of PLACES){
+      const n = (p.name||'').toLowerCase();
+      if (!n) continue;
+      if ((' '+text+' ').includes(' '+n+' ')) { results.push(p); continue; }
+      if (text.includes(n)) { results.push(p); continue; }
+      const toks = n.split(/\s+/)[0];
+      if (toks && toks.length>=3 && text.includes(toks)) results.push(p);
+    }
+    return results.filter((v,i,self)=> self.findIndex(x=>x.id===v.id)===i);
+  }
+
+  function renderPlaceListHtml(arr){
+    if (!arr || arr.length===0) return '관련 장소가 없습니다.';
+    return arr.map(p=> {
+      const img = p.img ? `<div style="margin-top:6px"><img src="${p.img}" style="width:100%;border-radius:6px" onerror="this.style.display=\\'none\\'"></div>` : '';
+      return `<div style="margin-bottom:8px"><strong>${escapeHtml(p.name)}</strong><div class="small-muted">${escapeHtml(p.addr)}</div>${img}
+        <div style="margin-top:6px"><a class="chat-link" href="#" data-id="${p.id}" onclick="(function(e){e.preventDefault();const id=this.getAttribute('data-id');window.focusMarker && window.focusMarker(id);})();return false">지도로 보기</a></div></div>`;
+    }).join('<hr style="margin:8px 0">');
+  }
+
+  function escapeHtml(s){ return (s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]); }
+
+  send.addEventListener('click', ()=> { const v=input.value; input.value=''; handleText(v); });
+  input.addEventListener('keydown', (e)=> { if(e.key==='Enter'){ e.preventDefault(); send.click(); } });
+})();
+</script>
+
 </body>
 </html>
